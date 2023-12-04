@@ -1,0 +1,202 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:rxdart/rxdart.dart';
+
+void main() => runApp(MyApp());
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'To-Do App',
+      home: BlocProvider(
+        create: (context) => TodoBloc(),
+        child: TodoPage(),
+      ),
+    );
+  }
+}
+
+class TodoPage extends StatefulWidget {
+  @override
+  _TodoPageState createState() => _TodoPageState();
+}
+
+class _TodoPageState extends State<TodoPage> {
+  final _textFieldController = TextEditingController();
+  final _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _textFieldController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('To-Do App'),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Expanded(
+              child: BlocBuilder<TodoBloc, List<Todo>>(
+                builder: (context, todoList) => ListView.builder(
+                  itemCount: todoList.length,
+                  itemBuilder: (context, index) => ListTile(
+                    leading: Checkbox(
+                      value: todoList[index].completed,
+                      onChanged: (value) => context
+                          .bloc<TodoBloc>()
+                          .add(TodoCompletedEvent(index, value)),
+                    ),
+                    title: Text(todoList[index].title),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete),
+                      onPressed: () =>
+                          context.bloc<TodoBloc>().add(TodoDeleteEvent(index)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      controller: _textFieldController,
+                      focusNode: _focusNode,
+                      decoration: InputDecoration(
+                        hintText: 'Add a task',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) {
+                        final todoTitle = _textFieldController.text;
+                        if (todoTitle.isNotEmpty) {
+                          context.bloc<TodoBloc>().add(
+                                TodoAddEvent(Todo(
+                                  title: todoTitle,
+                                  completed: false,
+                                )),
+                              );
+                          _textFieldController.clear();
+                          _focusNode.requestFocus();
+                        }
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.send),
+                    onPressed: () {
+                      final todoTitle = _textFieldController.text;
+                      if (todoTitle.isNotEmpty) {
+                        context.bloc<TodoBloc>().add(
+                              TodoAddEvent(Todo(
+                                title: todoTitle,
+                                completed: false,
+                              )),
+                            );
+                        _textFieldController.clear();
+                        _focusNode.requestFocus();
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TodoBloc extends Bloc<TodoEvent, List<Todo>> {
+  TodoBloc() : super([]);
+
+  @override
+  Stream<List<Todo>> mapEventToState(TodoEvent event) =>
+      Rx.merge([
+        event is TodoAddEvent
+            ? Stream.value(state..add(event.todo))
+            : Stream.empty(),
+        event is TodoDeleteEvent
+            ? Stream.value(state..removeAt(event.index))
+            : Stream.empty(),
+        event is TodoCompletedEvent
+            ? Stream.value(state
+              ..replaceRange(event.index, event.index + 1, [
+                Todo(
+                  title: state[event.index].title,
+                  completed: event.completed,
+                ),
+              ]))
+            : Stream.empty(),
+      ]);
+
+  @override
+  void onTransition(Transition<TodoEvent, List<Todo>> transition) {
+    print(transition);
+  }
+}
+
+class Todo {
+  final String title;
+  final bool completed;
+
+  Todo({
+    @required this.title,
+    @required this.completed,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Todo &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          completed == other.completed;
+
+  @override
+  int get hashCode => title.hashCode ^ completed.hashCode;
+
+  @override
+  String toString() => 'Todo{title: $title, completed: $completed}';
+}
+
+abstract class TodoEvent {}
+
+class TodoAddEvent extends TodoEvent {
+  final Todo todo;
+
+  TodoAddEvent(this.todo);
+
+  @override
+  String toString() => 'TodoAddEvent{todo: $todo}';
+}
+
+class TodoDeleteEvent extends TodoEvent {
+  final int index;
+
+  TodoDeleteEvent(this.index);
+
+  @override
+  String toString() => 'TodoDeleteEvent{index: $index}';
+}
+
+class TodoCompletedEvent extends TodoEvent {
+  final int index;
+  final bool completed;
+
+  TodoCompletedEvent(this.index, this.completed);
+
+  @override
+  String toString() =>
+      'TodoCompletedEvent{index: $index, completed: $completed}';
+}
